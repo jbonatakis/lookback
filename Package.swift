@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.library(name: "Lookback", targets: ["Lookback"])],
     targets: [
-        .target(name: "Lookback")
+        .target(name: "Lookback"),
+        .testTarget(name: "LookbackTests", dependencies: ["Lookback"])
     ]
 )
