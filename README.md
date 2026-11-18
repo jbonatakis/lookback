@@ -2,6 +2,18 @@
 
 Lookback is a read-only Swift library for exploring local coding-agent sessions. Its first provider reads Claude Code. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
 
+## Try the example
+
+Run these commands from the Lookback repository.
+
+```sh
+swift run lookback-demo                # Preview the most recently updated session
+swift run lookback-demo --list         # List sessions with IDs and titles
+swift run lookback-demo SESSION_ID     # Preview a session by its ID
+```
+
+The [example program](Examples/LookbackDemo/main.swift) shows recent conversation excerpts, the most-used tools, and message counts for the active conversation and the full recorded history.
+
 ## Read a session
 
 Add `.package(path: "../lookback")` to a sibling Swift package's dependencies and `.product(name: "Lookback", package: "lookback")` to the consuming target.
