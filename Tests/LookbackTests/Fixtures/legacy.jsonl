@@ -1,0 +1,17 @@
+{"timestamp":"2026-01-02T12:00:00.000Z","type":"session_meta","payload":{"id":"019a1234-5678-7000-8000-000000000001","timestamp":"2026-01-02T12:00:00.000Z","cwd":"/sample","originator":"codex_cli_rs","cli_version":"0.169.1","source":"cli","git":{"branch":"main"},"model_provider":"openai","history_mode":"legacy"}}
+{"timestamp":"2026-01-02T12:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"019a9876-1234-7000-8000-000000000001"}}
+{"timestamp":"2026-01-02T12:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\n<cwd>/sample</cwd>\n</environment_context>"}]}}
+{"timestamp":"2026-01-02T12:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Again"}]}}
+{"timestamp":"2026-01-02T12:00:04.000Z","type":"event_msg","payload":{"type":"user_message","message":"Again","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-01-02T12:00:05.000Z","type":"response_item","payload":{"type":"function_call","name":"lookup","arguments":"{\"key\":1}","call_id":"c1"}}
+{"timestamp":"2026-01-02T12:00:06.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"found"}}
+{"timestamp":"2026-01-02T12:00:07.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Answer 1"}}
+{"timestamp":"2026-01-02T12:00:08.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Answer 1"}]}}
+{"timestamp":"2026-01-02T12:00:09.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"019a9876-1234-7000-8000-000000000001","last_agent_message":"Answer 1"}}
+{"timestamp":"2026-01-02T12:00:10.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"019a9876-1234-7000-8000-000000000002"}}
+{"timestamp":"2026-01-02T12:00:11.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Again"}]}}
+{"timestamp":"2026-01-02T12:00:12.000Z","type":"event_msg","payload":{"type":"user_message","message":"Again","images":[],"local_images":[],"text_elements":[]}}
+{"timestamp":"2026-01-02T12:00:13.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Answer 2"}}
+{"timestamp":"2026-01-02T12:00:14.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Answer 2"}]}}
+{"timestamp":"2026-01-02T12:00:15.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"019a9876-1234-7000-8000-000000000002","last_agent_message":"Answer 2"}}
+{"timestamp":"2026-01-02T12:00:16.000Z","type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}

@@ -1,6 +1,6 @@
 # Lookback
 
-Lookback is a read-only Swift library for exploring local coding-agent sessions. Its first provider reads Claude Code. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
+Lookback is a read-only Swift library for exploring local Claude Code and Codex sessions. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
 
 ## Try the example
 
@@ -10,6 +10,8 @@ Run these commands from the Lookback repository.
 swift run lookback-demo                # Preview the most recently updated session
 swift run lookback-demo --list         # List sessions with IDs and titles
 swift run lookback-demo SESSION_ID     # Preview a session by its ID
+swift run lookback-demo --source codex --list
+swift run lookback-demo --source codex SESSION_ID
 ```
 
 The [example program](Examples/LookbackDemo/main.swift) shows recent conversation excerpts, the most-used tools, and message counts for the active conversation and the full recorded history.
@@ -29,18 +31,28 @@ func recentConversation(using reader: any SessionReader) throws -> [SessionMessa
 let messages = try recentConversation(using: ClaudeCodeReader())
 ```
 
-The default reader opens `$CLAUDE_CONFIG_DIR/projects` when configured and otherwise uses `~/.claude/projects`. Pass `ClaudeCodeReader(projectsDirectory: url)` to read another projects store. Reads are synchronous. Run them off the main thread in a UI.
+`ClaudeCodeReader` opens `$CLAUDE_CONFIG_DIR/projects` when configured and otherwise uses `~/.claude/projects`. Pass `ClaudeCodeReader(projectsDirectory: url)` to read another projects store. Reads are synchronous. Run them off the main thread in a UI.
+
+## Read Codex sessions
+
+Use `CodexReader()` with the same API. It discovers active rollouts under `$CODEX_HOME/sessions/YYYY/MM/DD/`, defaulting to `~/.codex`. To read an exported home including its archived threads, use `CodexReader(homeDirectory: url, includeArchived: true)`. Rollout headers identify top-level threads and user forks. The optional `session_index.jsonl` supplies names. The first visible prompt or the thread UUID supplies a fallback.
+
+The default reader includes unscoped threads. To also read account-scoped threads, pass `CodexReader(accountID: accountID, userID: userID)`. Marked rollouts require a matching creator account and, when present, creator user. The caller supplies these IDs. Lookback applies the same filter to discovery, direct lookup, and inherited fork history.
+
+Codex can record a message in several forms. Lookback pairs model messages with their display events and completed items within a turn, and links tool calls and results by call ID. A native message ID is used when available. Older records get deterministic IDs derived from the rollout segment and record position.
+
+The active view applies compaction and turn rollbacks. Paginated reverts can create another rollout segment pointing to an earlier prefix. The recorded view includes discarded turns still present in the thread's files. A fork inherits only its referenced prefix. Copy the referenced segments along with the current rollout when exporting a thread. A missing required segment produces `SessionReadError.incompleteHistory`. Opaque compaction summaries appear as system messages with a `.other(type: "compaction")` block. The Codex app server documents the corresponding [thread history operations](https://developers.openai.com/codex/app-server/).
 
 ## Choose a view
 
 - Use `conversation` to show what remained in the conversation on its selected branch. Compaction summaries are marked explicitly. Tool calls and their parallel results are linked back into the conversation.
-- Use `recordedMessages` to reconstruct activity over time. It includes visible messages from earlier context and abandoned branches in file order. A source message ID can repeat within one session. To index each occurrence, pair the session ID with its zero-based position in `recordedMessages`. The Claude Code reader supplies that position as `message.recordedIndex` in both views. Positions can change if earlier records are rewritten or removed.
+- Use `recordedMessages` to reconstruct activity over time. It includes visible messages from earlier context and abandoned branches in file order. A source message ID can repeat within one session. To index each occurrence, pair the session ID with its zero-based position in `recordedMessages`. Both readers supply that position as `message.recordedIndex` in both views. Positions can change if earlier records are rewritten or removed.
 - A message has a source-local ID, optional parent and timestamp, role, and ordered content blocks. Text, tool calls, and tool results are represented directly. Tool inputs and result contents are UTF-8 JSON. Other block types retain their type and position. Message parents can refer to internal records omitted from either view.
-- Session discovery returns top-level sessions with a usable title or prompt, ordered by modification time. It skips inaccessible projects and transcripts and selects the newest readable copy of a session. It samples the ends of each transcript and falls back to a full scan when it cannot find a title in the sample. Nested subagent transcripts have separate files and are outside the current API. Missing stores produce an empty listing. Malformed JSON lines, including an unfinished final write, are skipped.
+- Claude Code discovery returns top-level sessions with a usable title or prompt, ordered by modification time. It skips inaccessible projects and transcripts and selects the newest readable copy of a session. It samples the ends of each transcript and falls back to a full scan when it cannot find a title in the sample. Both providers skip subagent sessions and malformed JSON lines, including an unfinished final write. Missing stores produce an empty listing.
 
 ## Additional providers
 
-A provider implements `SessionReader`, declares a stable source identifier, and maps its native session store into `SessionInfo` and `SessionHistory`. Session IDs carry their source. File discovery, native ID validation, and transcript reconstruction are internal to each provider. The Claude implementation is in `Sources/Lookback/ClaudeCode/`. A future Codex provider can use its own layout and reconstruction rules.
+A provider implements `SessionReader`, declares a stable source identifier, and maps its native session store into `SessionInfo` and `SessionHistory`. Session IDs carry their source. File discovery, native ID validation, and transcript reconstruction are internal to each provider. See `Sources/Lookback/ClaudeCode/` and `Sources/Lookback/Codex/` for the two implementations.
 
 ## Compatibility
 

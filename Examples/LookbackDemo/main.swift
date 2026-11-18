@@ -35,7 +35,7 @@ func show(_ history: SessionHistory) {
         let speaker: String
         switch message.role {
         case .user: speaker = "You"
-        case .assistant: speaker = "Claude"
+        case .assistant: speaker = history.id.source == "codex" ? "Codex" : "Claude"
         case .system: speaker = message.isCompactionSummary ? "Compaction summary" : "System"
         case .tool: continue
         }
@@ -56,26 +56,38 @@ func show(_ history: SessionHistory) {
 }
 
 func run(_ arguments: [String]) throws {
-    let usage = "Usage: swift run lookback-demo [--list | SESSION_ID]"
+    let usage = "Usage: swift run lookback-demo [--source claude-code|codex] [--list | SESSION_ID]"
     if arguments == ["--help"] || arguments == ["-h"] { print(usage); return }
-    guard arguments.count <= 1 else { fail(usage) }
-
-    let reader = ClaudeCodeReader()
-    if let id = arguments.first, id != "--list" {
+    var args = arguments
+    var source = "claude-code"
+    if let flag = args.firstIndex(of: "--source") {
+        guard args.indices.contains(flag + 1) else { fail(usage) }
+        source = args[flag + 1]
+        args.removeSubrange(flag...flag + 1)
+    }
+    guard args.count <= 1 else { fail(usage) }
+    let reader: any SessionReader
+    let provider: String
+    switch source {
+    case "claude-code": reader = ClaudeCodeReader(); provider = "Claude Code"
+    case "codex": reader = CodexReader(); provider = "Codex"
+    default: fail(usage)
+    }
+    if let id = args.first, id != "--list" {
         show(try reader.readSession(SessionID(source: reader.source, value: id)))
         return
     }
     let sessions = try reader.listSessions()
-    if arguments == ["--list"] {
+    if args == ["--list"] {
         for session in sessions {
             let updated = session.modifiedAt.formatted(date: .abbreviated, time: .shortened)
             print("\(session.id.value)  \(updated)  \(preview(session.title, limit: 72))")
         }
-        if sessions.isEmpty { print("No Claude Code sessions found.") }
+        if sessions.isEmpty { print("No \(provider) sessions found.") }
     } else if let latest = sessions.first {
         show(try reader.readSession(latest.id))
     } else {
-        print("No Claude Code sessions found.")
+        print("No \(provider) sessions found.")
     }
 }
 
@@ -89,5 +101,5 @@ do {
 } catch SessionReadError.invalidSessionID, SessionReadError.sessionNotFound {
     fail("Unknown session. Use --list to see available IDs.")
 } catch {
-    fail("Could not read Claude Code history: \(error.localizedDescription)")
+    fail("Could not read session history: \(error.localizedDescription)")
 }

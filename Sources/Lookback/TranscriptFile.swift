@@ -3,7 +3,16 @@ import Foundation
 typealias Row = [String: Any]
 
 enum TranscriptFile {
-    static func forEachRow(in url: URL, _ visit: (Row) -> Void) throws {
+    static func firstRow(in url: URL) throws -> Row? {
+        enum Found: Error { case row }
+        var first: Row?
+        do {
+            try forEachRow(in: url) { first = $0; throw Found.row }
+        } catch Found.row {}
+        return first
+    }
+
+    static func forEachRow(in url: URL, _ visit: (Row) throws -> Void) throws {
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }
         // Bound the read to the snapshot length even while the writer is appending.
@@ -17,17 +26,17 @@ enum TranscriptFile {
             var start = data.startIndex
             for end in data.indices where data[end] == 10 {
                 if partial.isEmpty {
-                    parse(data[start..<end], visit)
+                    try parse(data[start..<end], visit)
                 } else {
                     partial.append(data[start..<end])
-                    parse(partial, visit)
+                    try parse(partial, visit)
                     partial = Data()
                 }
                 start = end + 1
             }
             partial.append(data[start...])
         }
-        parse(partial, visit)
+        try parse(partial, visit)
     }
 
     /// Read whole JSON records at both ends. Avoid splitting a multi-byte string or
@@ -59,9 +68,9 @@ enum TranscriptFile {
         return false
     }
 
-    private static func parse(_ data: Data, _ visit: (Row) -> Void) {
+    private static func parse(_ data: Data, _ visit: (Row) throws -> Void) rethrows {
         guard !data.isEmpty, let row = try? JSONSerialization.jsonObject(with: data) as? Row else { return }
-        visit(row)
+        try visit(row)
     }
 }
 
@@ -69,4 +78,11 @@ func transcriptDate(_ value: String?) -> Date? {
     guard let value else { return nil }
     if let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value) { return date }
     return try? Date.ISO8601FormatStyle().parse(value)
+}
+
+extension CocoaError {
+    var isMissingFile: Bool { code == .fileNoSuchFile || code == .fileReadNoSuchFile }
+
+    // FileHandle can report fileWriteNoPermission when opening a file for reading.
+    var isUnavailableFile: Bool { isMissingFile || code == .fileReadNoPermission || code == .fileWriteNoPermission }
 }

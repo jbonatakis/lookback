@@ -93,4 +93,6 @@ public enum SessionReadError: Error, Equatable {
     case unsupportedSource(String)
     case invalidSessionID(String)
     case sessionNotFound(SessionID)
+    /// A persisted thread refers to a missing, inaccessible, or inconsistent history segment.
+    case incompleteHistory(SessionID)
 }

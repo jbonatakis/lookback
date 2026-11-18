@@ -29,7 +29,7 @@ public struct ClaudeCodeReader: SessionReader {
                 if let info = metadata.info(id: SessionID(source: source, value: file.value), modifiedAt: file.modified) {
                     sessions.append(info)
                 }
-            } catch let error as CocoaError where Self.isUnavailable(error) {
+            } catch let error as CocoaError where error.isUnavailableFile {
                 continue
             }
         }
@@ -56,8 +56,8 @@ public struct ClaudeCodeReader: SessionReader {
                 return SessionHistory(id: canonicalID, conversation: Conversation(rows).messages(),
                                       recordedMessages: recordedMessages,
                                       info: metadata.info(id: canonicalID, modifiedAt: file.modified))
-            } catch let error as CocoaError where Self.isUnavailable(error) {
-                if !Self.isMissing(error) { accessError = error }
+            } catch let error as CocoaError where error.isUnavailableFile {
+                if !error.isMissingFile { accessError = error }
             }
         }
         if let accessError { throw accessError }
@@ -70,20 +70,11 @@ public struct ClaudeCodeReader: SessionReader {
         let modified: Date
     }
 
-    private static func isMissing(_ error: CocoaError) -> Bool {
-        error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
-    }
-
-    private static func isUnavailable(_ error: CocoaError) -> Bool {
-        // FileHandle can report fileWriteNoPermission even when opening a file for reading.
-        isMissing(error) || error.code == .fileReadNoPermission || error.code == .fileWriteNoPermission
-    }
-
     private func children(of directory: URL, keys: Set<URLResourceKey>) throws -> [URL] {
         do {
             return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys),
                                                                options: [.skipsHiddenFiles])
-        } catch let error as CocoaError where Self.isMissing(error) {
+        } catch let error as CocoaError where error.isMissingFile {
             return []
         }
     }
@@ -102,12 +93,12 @@ public struct ClaudeCodeReader: SessionReader {
                     guard wanted == nil || wanted == value else { continue }
                     let attributes: URLResourceValues
                     do { attributes = try file.resourceValues(forKeys: keys) }
-                    catch let error as CocoaError where Self.isUnavailable(error) { continue }
+                    catch let error as CocoaError where error.isUnavailableFile { continue }
                     guard attributes.isRegularFile == true, attributes.isSymbolicLink != true,
                           let modified = attributes.contentModificationDate else { continue }
                     result.append(SessionFile(value: value, url: file, modified: modified))
                 }
-            } catch let error as CocoaError where Self.isUnavailable(error) {
+            } catch let error as CocoaError where error.isUnavailableFile {
                 continue
             }
         }

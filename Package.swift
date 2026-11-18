@@ -11,6 +11,6 @@ let package = Package(
     targets: [
         .target(name: "Lookback"),
         .executableTarget(name: "LookbackDemo", dependencies: ["Lookback"], path: "Examples/LookbackDemo"),
-        .testTarget(name: "LookbackTests", dependencies: ["Lookback"])
+        .testTarget(name: "LookbackTests", dependencies: ["Lookback"], resources: [.copy("Fixtures")])
     ]
 )
