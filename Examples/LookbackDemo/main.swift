@@ -9,10 +9,9 @@ func preview(_ text: String, limit: Int = 120) -> String {
     return prefix.endIndex == line.endIndex ? line : "\(prefix)…"
 }
 
-func show(_ session: SessionInfo, using reader: any SessionReader) throws {
-    let history = try reader.readSession(session.id)
-    print(preview(session.title))
-    if let directory = session.workingDirectory {
+func show(_ history: SessionHistory) {
+    print(preview(history.info?.title ?? history.id.value))
+    if let session = history.info, let directory = session.workingDirectory {
         print(preview(directory + (session.gitBranch.map { "  [\($0)]" } ?? "")))
     }
     print("\(history.conversation.count) messages in the active conversation · \(history.recordedMessages.count) recorded")
@@ -62,6 +61,10 @@ func run(_ arguments: [String]) throws {
     guard arguments.count <= 1 else { fail(usage) }
 
     let reader = ClaudeCodeReader()
+    if let id = arguments.first, id != "--list" {
+        show(try reader.readSession(SessionID(source: reader.source, value: id)))
+        return
+    }
     let sessions = try reader.listSessions()
     if arguments == ["--list"] {
         for session in sessions {
@@ -69,13 +72,8 @@ func run(_ arguments: [String]) throws {
             print("\(session.id.value)  \(updated)  \(preview(session.title, limit: 72))")
         }
         if sessions.isEmpty { print("No Claude Code sessions found.") }
-    } else if let id = arguments.first {
-        guard let session = sessions.first(where: { $0.id.value.caseInsensitiveCompare(id) == .orderedSame }) else {
-            fail("Unknown session. Use --list to see available IDs.")
-        }
-        try show(session, using: reader)
     } else if let latest = sessions.first {
-        try show(latest, using: reader)
+        show(try reader.readSession(latest.id))
     } else {
         print("No Claude Code sessions found.")
     }
@@ -88,6 +86,8 @@ func fail(_ description: String) -> Never {
 
 do {
     try run(Array(CommandLine.arguments.dropFirst()))
+} catch SessionReadError.invalidSessionID, SessionReadError.sessionNotFound {
+    fail("Unknown session. Use --list to see available IDs.")
 } catch {
     fail("Could not read Claude Code history: \(error.localizedDescription)")
 }

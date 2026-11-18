@@ -43,8 +43,32 @@ private struct Store {
     #expect(info.title == "My investigation" && info.workingDirectory == "/a-real/project")
     #expect(info.gitBranch == "fix" && info.createdAt != nil)
     let history = try store.reader.readSession(info.id)
+    #expect(history.info?.id == info.id && history.info?.title == info.title)
+    #expect(history.info?.workingDirectory == info.workingDirectory && history.info?.gitBranch == info.gitBranch)
     #expect(history.conversation.map(\.id) == ["prompt", "reply"])
     #expect(history.conversation.last?.blocks == [.other(type: "future-type")])
+}
+
+@Test(.enabled(if: geteuid() != 0)) func unreadableTranscriptsAndProjectsDoNotHideReadableSessions() throws {
+    let store = Store()
+    defer { store.cleanUp() }
+    let prompt = #"{"uuid":"u","type":"user","message":{"content":"readable"}}"#
+    let readable = try store.write(prompt)
+    try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 50)], ofItemAtPath: readable.path)
+    let newerCopy = try store.write(prompt, in: "copy")
+    let unreadable = try store.write(prompt, secondary)
+    let project = try store.write(prompt, in: "restricted").deletingLastPathComponent()
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: project.path) }
+    for url in [newerCopy, unreadable, project] {
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: url.path)
+    }
+
+    let sessions = try store.reader.listSessions()
+    #expect(sessions.map(\.id) == [sid])
+    #expect(sessions.first?.modifiedAt == Date(timeIntervalSince1970: 50))
+    #expect(try store.reader.readSession(sid).conversation.first?.blocks == [.text("readable")])
+    let inaccessibleID = SessionID(source: sid.source, value: secondary)
+    #expect(throws: CocoaError.self) { try store.reader.readSession(inaccessibleID) }
 }
 
 @Test func compactionAndBranchesHaveTwoDistinctViews() throws {

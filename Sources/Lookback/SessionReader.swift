@@ -64,13 +64,16 @@ public struct SessionMessage: Identifiable, Sendable {
 
 public struct SessionHistory: Sendable {
     public let id: SessionID
+    /// Session metadata, when available from the provider during the read.
+    public let info: SessionInfo?
     /// The conversation on the selected branch, including linked tool activity.
     public let conversation: [SessionMessage]
     /// Visible messages in storage order, including superseded branches and earlier context.
     public let recordedMessages: [SessionMessage]
 
-    public init(id: SessionID, conversation: [SessionMessage], recordedMessages: [SessionMessage]) {
+    public init(id: SessionID, conversation: [SessionMessage], recordedMessages: [SessionMessage], info: SessionInfo? = nil) {
         self.id = id
+        self.info = info
         self.conversation = conversation
         self.recordedMessages = recordedMessages
     }

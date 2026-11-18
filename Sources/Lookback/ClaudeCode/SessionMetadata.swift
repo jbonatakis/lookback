@@ -15,6 +15,12 @@ struct SessionMetadata {
 
     var title: String? { custom ?? generated ?? lastPrompt ?? summary ?? firstPrompt ?? command }
 
+    func info(id: SessionID, modifiedAt: Date) -> SessionInfo? {
+        guard !isSidechain, let title else { return nil }
+        return SessionInfo(id: id, title: title, workingDirectory: cwd, gitBranch: branch,
+                           createdAt: createdAt, modifiedAt: modifiedAt)
+    }
+
     mutating func observe(_ row: Row) {
         if first {
             isSidechain = row["isSidechain"] as? Bool == true
