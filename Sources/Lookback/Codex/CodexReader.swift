@@ -1,5 +1,14 @@
 import Foundation
 
+/// A scope recorded by a local top-level Codex thread. The project and date
+/// describe the newest matching file and can be used to label an account picker.
+public struct CodexLocalAccount: Sendable {
+    public let accountID: String
+    public let userID: String?
+    public let lastWorkingDirectory: String?
+    public let lastModified: Date
+}
+
 /// Reads locally persisted Codex sessions. Supplying an account scope selects matching marked rollouts.
 public struct CodexReader: SessionReader {
     public let source = "codex"
@@ -49,11 +58,41 @@ public struct CodexReader: SessionReader {
         return history
     }
 
-    private func includes(_ header: Row) -> Bool {
+    /// Discovers account identities from rollout headers without reading credentials.
+    /// Discovery alone does not change which sessions this reader can open.
+    public func localAccounts() throws -> [CodexLocalAccount] {
+        var accounts: [CodexLocalAccount] = []
+        // files() visits the most recently modified copy first.
+        for file in try files() {
+            try Task.checkCancellation()
+            do {
+                guard let row = try TranscriptFile.firstRow(in: file.url), row["type"] as? String == "session_meta",
+                      let header = row["payload"] as? Row, (header["id"] as? String)?.lowercased() == file.value,
+                      Self.isUserThread(header), header["account_scoped"] as? Bool == true,
+                      let account = header["creator_account_id"] as? String, !account.isEmpty else { continue }
+                let owner = header["creator_user_id"]
+                let user = owner as? String
+                if let owner, !(owner is NSNull), user?.isEmpty != false { continue }
+                if !accounts.contains(where: { $0.accountID == account && $0.userID == user }) {
+                    accounts.append(.init(accountID: account, userID: user, lastWorkingDirectory: header["cwd"] as? String, lastModified: file.modified))
+                }
+            } catch let error as CocoaError where error.isUnavailableFile { continue }
+        }
+        // A user-scoped reader already includes the account's ownerless threads.
+        let accountsWithUsers = Set(accounts.filter { $0.userID != nil }.map(\.accountID))
+        return accounts.filter { $0.userID != nil || !accountsWithUsers.contains($0.accountID) }
+    }
+
+    private static func isUserThread(_ header: Row) -> Bool {
         if let source = header["thread_source"] as? String, source != "user" { return false }
         if header["source"] as? String == "subagent" { return false }
         if let source = header["source"] as? Row, source["subagent"] != nil { return false }
         if header["parent_thread_id"] is String && !(header["forked_from_id"] is String) { return false }
+        return true
+    }
+
+    private func includes(_ header: Row) -> Bool {
+        guard Self.isUserThread(header) else { return false }
         if let scope = header["account_scoped"] {
             guard let scoped = scope as? Bool else { return false }
             if !scoped { return true }

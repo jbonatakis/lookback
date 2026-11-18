@@ -37,7 +37,7 @@ let messages = try recentConversation(using: ClaudeCodeReader())
 
 Use `CodexReader()` with the same API. It discovers active rollouts under `$CODEX_HOME/sessions/YYYY/MM/DD/`, defaulting to `~/.codex`. To read an exported home including its archived threads, use `CodexReader(homeDirectory: url, includeArchived: true)`. Rollout headers identify top-level threads and user forks. The optional `session_index.jsonl` supplies names. The first visible prompt or the thread UUID supplies a fallback.
 
-The default reader includes unscoped threads. To also read account-scoped threads, pass `CodexReader(accountID: accountID, userID: userID)`. Marked rollouts require a matching creator account and, when present, creator user. The caller supplies these IDs. Lookback applies the same filter to discovery, direct lookup, and inherited fork history.
+The default reader includes unscoped threads. To also read account-scoped threads, pass `CodexReader(accountID: accountID, userID: userID)`. Marked rollouts require a matching creator account and, when present, creator user. Use `CodexReader.localAccounts()` to discover candidate account and user pairs from local top-level rollout headers. Each choice includes the last project and modification date. Pass the selected pair to the reader. Lookback applies the same filter to discovery, direct lookup, and inherited fork history.
 
 Codex can record a message in several forms. Lookback pairs model messages with their display events and completed items within a turn, and links tool calls and results by call ID. A native message ID is used when available. Older records get deterministic IDs derived from the rollout segment and record position.
 
