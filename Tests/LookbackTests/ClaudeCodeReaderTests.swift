@@ -106,6 +106,7 @@ private struct Store {
     """#)
     let messages = try store.reader.readSession(sid).conversation
     #expect(messages.map(\.id) == ["u", "a", "b", "r2", "r1", "done"])
+    #expect(messages.compactMap(\.recordedIndex) == [0, 1, 2, 5, 3, 7])
     #expect(messages[1].blocks == [.toolCall(id: "one", name: "lookup", inputJSON: Data(#"{"key":1}"#.utf8))])
     #expect(messages[3].role == .tool)
     #expect(messages[3].blocks == [.toolResult(callID: "two", contentJSON: Data(#""Failed""#.utf8), isError: true)])
@@ -167,12 +168,20 @@ private struct Store {
     defer { store.cleanUp() }
     try store.write(#"""
     {"type":"user","uuid":"first","message":{"content":[null,{"type":"text","text":"first prompt"}]}}
+    {"type":"progress","uuid":"internal","parentUuid":"first"}
     {"type":"user","uuid":"second","message":{"content":"alternative"}}
     {"type":"assistant","uuid":"same","parentUuid":"first","message":{"content":[7,{"type":"text","text":"first terminal"}]}}
     {"type":"assistant","uuid":"same","parentUuid":"second","message":{"content":"second terminal"}}
     """#)
-    let messages = try store.reader.readSession(sid).conversation
+    let history = try store.reader.readSession(sid)
+    let recorded = history.recordedMessages
+    try #require(recorded.map(\.id) == ["first", "second", "same", "same"])
+    #expect(recorded.compactMap(\.recordedIndex) == [0, 1, 2, 3])
+    #expect(recorded[2].blocks == [.text("first terminal")])
+    #expect(recorded[3].blocks == [.text("second terminal")])
+    let messages = history.conversation
     #expect(messages.map(\.id) == ["first", "same"])
+    #expect(messages.compactMap(\.recordedIndex) == [0, 2])
     #expect(messages.first?.blocks == [.text("first prompt")])
     #expect(messages.last?.blocks == [.text("first terminal")])
 }

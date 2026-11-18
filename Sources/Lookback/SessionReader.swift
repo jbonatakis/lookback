@@ -44,7 +44,10 @@ public enum MessageBlock: Equatable, Sendable {
 }
 
 public struct SessionMessage: Identifiable, Sendable {
+    /// The source's message ID. Multiple recorded occurrences can share this value.
     public let id: String
+    /// Zero-based position in this history's recordedMessages, when supplied by the provider.
+    public let recordedIndex: Int?
     public let parentID: String?
     public let timestamp: Date?
     public let role: MessageRole
@@ -52,8 +55,9 @@ public struct SessionMessage: Identifiable, Sendable {
     public let isCompactionSummary: Bool
 
     public init(id: String, parentID: String?, timestamp: Date?, role: MessageRole,
-                blocks: [MessageBlock], isCompactionSummary: Bool = false) {
+                blocks: [MessageBlock], isCompactionSummary: Bool = false, recordedIndex: Int? = nil) {
         self.id = id
+        self.recordedIndex = recordedIndex
         self.parentID = parentID
         self.timestamp = timestamp
         self.role = role

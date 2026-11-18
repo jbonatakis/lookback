@@ -44,14 +44,17 @@ public struct ClaudeCodeReader: SessionReader {
         var accessError: CocoaError?
         for file in try files(matching: value) {
             var rows: [Entry] = []
+            var recordedMessages: [SessionMessage] = []
             var metadata = SessionMetadata()
             do {
                 try TranscriptFile.forEachRow(in: file.url) {
                     metadata.observe($0)
-                    if let entry = Entry($0) { rows.append(entry) }
+                    guard let entry = Entry($0, recordedIndex: recordedMessages.count) else { return }
+                    rows.append(entry)
+                    if let message = entry.message { recordedMessages.append(message) }
                 }
                 return SessionHistory(id: canonicalID, conversation: Conversation(rows).messages(),
-                                      recordedMessages: rows.compactMap(\.message),
+                                      recordedMessages: recordedMessages,
                                       info: metadata.info(id: canonicalID, modifiedAt: file.modified))
             } catch let error as CocoaError where Self.isUnavailable(error) {
                 if !Self.isMissing(error) { accessError = error }

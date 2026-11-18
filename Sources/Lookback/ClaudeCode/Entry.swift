@@ -16,7 +16,7 @@ struct Entry {
 
     var isMessage: Bool { type == "user" || type == "assistant" }
 
-    init?(_ row: Row) {
+    init?(_ row: Row, recordedIndex: Int) {
         guard let id = row["uuid"] as? String, let type = row["type"] as? String,
               ["assistant", "user", "system", "attachment", "progress"].contains(type) else { return nil }
         self.id = id
@@ -46,7 +46,7 @@ struct Entry {
         else if carriesResult { role = .tool }
         else { role = .user }
         message = SessionMessage(id: id, parentID: parent, timestamp: transcriptDate(timestamp),
-                                 role: role, blocks: blocks, isCompactionSummary: compact)
+                                 role: role, blocks: blocks, isCompactionSummary: compact, recordedIndex: recordedIndex)
     }
 
     func sameWriter(as other: Entry) -> Bool {
