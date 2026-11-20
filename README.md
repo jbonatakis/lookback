@@ -58,6 +58,8 @@ A provider implements `SessionReader`, declares a stable source identifier, and 
 
 The Claude Code file format can evolve. Conversation selection and parallel-tool recovery follow the pinned [Anthropic session reader](https://github.com/anthropics/claude-agent-sdk-python/blob/8ed58affbee28a201bb5aeb34afcd513415acac5/src/claude_agent_sdk/_internal/sessions.py). Its MIT notice is included in [ThirdParty/ClaudeAgentSDK-LICENSE](ThirdParty/ClaudeAgentSDK-LICENSE).
 
+For batch imports, call `catalogSnapshot()` on a Claude Code or Codex reader. Use that reader for listing and reading sessions during the pass. A Codex snapshot also supports `localAccounts()` and `scoped(accountID:userID:)` without rebuilding its catalog. Create a fresh snapshot for the next pass to pick up new files and title changes.
+
 Run `swift test` with a Swift 6 toolchain that includes Swift Testing. Tests use synthetic transcripts in temporary directories.
 
 On a Mac using Apple's standalone Command Line Tools, SwiftPM may need the installed Testing framework path. This command runs the suite on that setup.

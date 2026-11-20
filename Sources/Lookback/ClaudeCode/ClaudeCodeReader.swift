@@ -5,6 +5,16 @@ public struct ClaudeCodeReader: SessionReader {
     public let source = "claude-code"
     public let projectsDirectory: URL
 
+    private var snapshot: (files: [SessionFile], byID: [String: [SessionFile]])?
+
+    /// Freeze the ordered file catalog for listing and reading a batch of sessions.
+    public func catalogSnapshot() throws -> Self {
+        let files = try files()
+        var reader = self
+        reader.snapshot = (files, Dictionary(grouping: files, by: \.value))
+        return reader
+    }
+
     /// Uses CLAUDE_CONFIG_DIR/projects or ~/.claude/projects unless given a projects directory directly.
     public init(projectsDirectory: URL? = nil) {
         let override = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
@@ -17,7 +27,8 @@ public struct ClaudeCodeReader: SessionReader {
     public func listSessions() throws -> [SessionInfo] {
         var sessions: [SessionInfo] = []
         var visited = Set<String>()
-        for file in try files() where !visited.contains(file.value) {
+        for file in try snapshot?.files ?? files() where !visited.contains(file.value) {
+            guard snapshot == nil || TranscriptFile.isRegularFile(file.url, under: projectsDirectory) else { continue }
             do {
                 var metadata = SessionMetadata()
                 let complete = try TranscriptFile.sample(in: file.url) { metadata.observe($0) }
@@ -42,7 +53,9 @@ public struct ClaudeCodeReader: SessionReader {
         let value = uuid.uuidString.lowercased()
         let canonicalID = SessionID(source: source, value: value)
         var accessError: CocoaError?
-        for file in try files(matching: value) {
+        let candidates = try snapshot.map { $0.byID[value] ?? [] } ?? files(matching: value)
+        for file in candidates {
+            guard snapshot == nil || TranscriptFile.isRegularFile(file.url, under: projectsDirectory) else { continue }
             var rows: [Entry] = []
             var recordedMessages: [SessionMessage] = []
             var metadata = SessionMetadata()

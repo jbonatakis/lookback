@@ -3,6 +3,18 @@ import Foundation
 typealias Row = [String: Any]
 
 enum TranscriptFile {
+    // Directory entries from a catalog can be replaced with links between listing and reading.
+    static func isRegularFile(_ url: URL, under root: URL) -> Bool {
+        let base = root.standardizedFileURL.pathComponents
+        let parts = url.standardizedFileURL.pathComponents
+        guard parts.starts(with: base) else { return false }
+        let relative = parts.dropFirst(base.count).joined(separator: "/")
+        let expected = root.resolvingSymlinksInPath().appendingPathComponent(relative)
+        let current = URL(fileURLWithPath: url.path)
+        return expected.standardizedFileURL.path == current.resolvingSymlinksInPath().standardizedFileURL.path &&
+            (try? current.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    }
+
     static func firstRow(in url: URL) throws -> Row? {
         enum Found: Error { case row }
         var first: Row?

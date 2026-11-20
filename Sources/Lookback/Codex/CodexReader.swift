@@ -16,6 +16,21 @@ public struct CodexReader: SessionReader {
     public let includeArchived: Bool
     public let accountID: String?
     public let userID: String?
+    private var snapshot: (files: [File], catalog: Catalog, names: [String: String])?
+
+    /// Freeze file membership and indexed titles for one import pass. History is read on demand.
+    public func catalogSnapshot() throws -> Self {
+        let files = try files()
+        var reader = self
+        reader.snapshot = (files, Catalog(files), threadNames())
+        return reader
+    }
+
+    public func scoped(accountID: String?, userID: String?) -> Self {
+        var reader = Self(homeDirectory: homeDirectory, includeArchived: includeArchived, accountID: accountID, userID: userID)
+        reader.snapshot = snapshot
+        return reader
+    }
 
     public init(homeDirectory: URL? = nil, includeArchived: Bool = false, accountID: String? = nil, userID: String? = nil) {
         let override = ProcessInfo.processInfo.environment["CODEX_HOME"]
@@ -28,9 +43,9 @@ public struct CodexReader: SessionReader {
     }
 
     public func listSessions() throws -> [SessionInfo] {
-        let names = threadNames()
+        let names = snapshot?.names ?? threadNames()
         var sessions: [SessionInfo] = []
-        let catalog = try Catalog(files())
+        let catalog = try snapshot?.catalog ?? Catalog(files())
         for value in catalog.sessions.keys {
             do {
                 if let info = try read(value, catalog: catalog, name: names[value], history: false)?.info {
@@ -49,9 +64,10 @@ public struct CodexReader: SessionReader {
         guard id.source == source else { throw SessionReadError.unsupportedSource(id.source) }
         guard let uuid = UUID(uuidString: id.value) else { throw SessionReadError.invalidSessionID(id.value) }
         let value = uuid.uuidString.lowercased()
-        let catalog = try Catalog(files())
+        let catalog = try snapshot?.catalog ?? Catalog(files())
         guard catalog.sessions[value] != nil else { throw SessionReadError.sessionNotFound(id) }
-        let name = threadNames(matching: value)[value]
+        let names = snapshot?.names ?? threadNames(matching: value)
+        let name = names[value]
         guard let history = try read(value, catalog: catalog, name: name, history: true) else {
             throw SessionReadError.sessionNotFound(id)
         }
@@ -63,10 +79,11 @@ public struct CodexReader: SessionReader {
     public func localAccounts() throws -> [CodexLocalAccount] {
         var accounts: [CodexLocalAccount] = []
         // files() visits the most recently modified copy first.
-        for file in try files() {
+        for file in try snapshot?.files ?? files() {
             try Task.checkCancellation()
             do {
-                guard let row = try TranscriptFile.firstRow(in: file.url), row["type"] as? String == "session_meta",
+                guard snapshot == nil || TranscriptFile.isRegularFile(file.url, under: homeDirectory),
+                      let row = try TranscriptFile.firstRow(in: file.url), row["type"] as? String == "session_meta",
                       let header = row["payload"] as? Row, (header["id"] as? String)?.lowercased() == file.value,
                       Self.isUserThread(header), header["account_scoped"] as? Bool == true,
                       let account = header["creator_account_id"] as? String, !account.isEmpty else { continue }
@@ -129,7 +146,8 @@ public struct CodexReader: SessionReader {
             var accessError: CocoaError?
             for file in catalog.segments[key] ?? [] {
                 do {
-                    guard let row = try TranscriptFile.firstRow(in: file.url), row["type"] as? String == "session_meta",
+                    guard snapshot == nil || TranscriptFile.isRegularFile(file.url, under: homeDirectory),
+                          let row = try TranscriptFile.firstRow(in: file.url), row["type"] as? String == "session_meta",
                           let header = row["payload"] as? Row,
                           (header["id"] as? String)?.lowercased() == file.value, includes(header) else { continue }
                     let segment = try CodexSegment(key: key, file: file.url, modified: file.modified, header: header, id: id)

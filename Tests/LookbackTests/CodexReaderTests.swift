@@ -215,3 +215,16 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     #expect(accounts.count == 2 && accounts.allSatisfy { $0.lastWorkingDirectory == "/sample" })
     #expect(try store.reader.listSessions().isEmpty)
 }
+
+@Test func codexCatalogIsSharedByScopedReadsAndRefreshedOnTheNextPass() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write(store.fixture("legacy"))
+    let snapshot = try store.reader.catalogSnapshot()
+    let scoped = snapshot.scoped(accountID: nil, userID: nil)
+    let first = try #require(scoped.listSessions().first)
+    #expect(try scoped.readSession(first.id).conversation.map(\.blocks) == store.reader.readSession(first.id).conversation.map(\.blocks))
+    try store.write(store.fixture("paginated"), id: paginatedID)
+    #expect(try scoped.listSessions().map(\.id) == [first.id])
+    #expect(try snapshot.catalogSnapshot().listSessions().count == 2)
+}
