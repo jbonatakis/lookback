@@ -93,7 +93,21 @@ struct CodexHistory {
 
     mutating func finish(info: SessionInfo) -> SessionHistory {
         flush()
-        return SessionHistory(id: info.id, conversation: active.map { recorded[$0] }, recordedMessages: recorded, info: info)
+        // The remaining turns already reflect rollbacks and the selected segment's fork point.
+        // A context replacement changes what the model sees, not what was said on that branch.
+        var transcript: [Int] = []
+        for turn in turns {
+            for edit in turn.edits {
+                switch edit {
+                case let .append(index): transcript.append(index)
+                case let .replace(indices):
+                    // A rotated file may start with a snapshot as its only surviving history.
+                    if transcript.isEmpty { transcript = indices }
+                }
+            }
+        }
+        return SessionHistory(id: info.id, conversation: active.map { recorded[$0] }, recordedMessages: recorded,
+                              info: info, transcript: transcript == active ? nil : transcript.map { recorded[$0] })
     }
 
     private mutating func startTurn(_ id: String?) {

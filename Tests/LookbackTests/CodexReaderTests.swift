@@ -44,10 +44,38 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     #expect(history.recordedMessages.map(\.blocks) == expected + (modern ? [[.other(type: "compaction")]] : []))
     #expect(history.recordedMessages.compactMap(\.recordedIndex) == Array(history.recordedMessages.indices))
     #expect(history.conversation.compactMap(\.recordedIndex) == (modern ? [4, 6] : [0, 1, 2, 3]))
+    #expect(history.transcript.compactMap(\.recordedIndex) == Array(0..<(modern ? 6 : 4)))
     if modern {
         #expect(history.conversation.map(\.id) == ["ui-2", "compact-1"])
         #expect(history.conversation.last?.isCompactionSummary == true)
     }
+}
+
+@Test func codexTranscriptSurvivesCompactionAndDropsRolledBackReplies() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    let fixture = try store.fixture("paginated")
+    let continuation = """
+    {"type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}
+    {"type":"event_msg","payload":{"type":"user_message","message":"Try again"}}
+    {"type":"event_msg","payload":{"type":"agent_message","message":"Revised answer"}}
+    {"type":"compacted","payload":{"message":"Summary"}}
+    {"type":"compacted","payload":{"message":"Second summary"}}
+    """
+    try store.write(fixture + "\n" + continuation, id: paginatedID)
+    let result = try store.reader.readSession(SessionID(source: "codex", value: paginatedID))
+    #expect(result.transcript.compactMap(\.recordedIndex) == [0, 1, 2, 3, 7, 8])
+    #expect(result.transcript.last?.blocks == [.text("Revised answer")])
+    #expect(result.conversation.last?.blocks == [.text("Second summary")])
+
+    let snapshot = """
+    {"type":"session_meta","payload":{"id":"\(legacyID)","source":"cli"}}
+    {"type":"compacted","payload":{"message":"Only surviving context"}}
+    {"type":"event_msg","payload":{"type":"agent_message","message":"Continued reply"}}
+    """
+    try store.write(snapshot)
+    let rotated = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(rotated.transcript.map(\.blocks) == [[.text("Only surviving context")], [.text("Continued reply")]])
 }
 
 @Test func codexDiscoveryValidatesScopeAndUsesTheIndexOnlyForNames() throws {
@@ -105,6 +133,7 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     let reader = store.reader
     let history = try reader.readSession(SessionID(source: "codex", value: paginatedID))
     #expect(history.conversation.compactMap(\.recordedIndex) == [0, 1, 2, 3, 7])
+    #expect(history.transcript.compactMap(\.recordedIndex) == [0, 1, 2, 3, 7])
     #expect(history.recordedMessages.count == 8)
     let forked = """
     {"ordinal":15,"type":"session_meta","payload":{"id":"\(fork)","forked_from_id":"\(paginatedID)","history_base":{"thread_id":"\(segment)","end_ordinal_exclusive":15}}}
@@ -114,6 +143,7 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     let result = try reader.readSession(SessionID(source: "codex", value: fork))
     #expect(result.recordedMessages.count == 6)
     #expect(result.conversation.compactMap(\.recordedIndex) == Array(0..<6))
+    #expect(result.transcript.compactMap(\.recordedIndex) == Array(0..<6))
     #expect(result.conversation.suffix(2).map(\.id) == ["new", "fork-reply"])
     #expect(try Set(reader.listSessions().map(\.id.value)) == [paginatedID, fork])
 

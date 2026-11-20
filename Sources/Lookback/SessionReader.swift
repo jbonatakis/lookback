@@ -72,13 +72,17 @@ public struct SessionHistory: Sendable {
     public let info: SessionInfo?
     /// The conversation on the selected branch, including linked tool activity.
     public let conversation: [SessionMessage]
+    /// The selected branch's visible exchange. Codex retains original turns across context compaction.
+    public let transcript: [SessionMessage]
     /// Visible messages in storage order, including superseded branches and earlier context.
     public let recordedMessages: [SessionMessage]
 
-    public init(id: SessionID, conversation: [SessionMessage], recordedMessages: [SessionMessage], info: SessionInfo? = nil) {
+    public init(id: SessionID, conversation: [SessionMessage], recordedMessages: [SessionMessage], info: SessionInfo? = nil,
+                transcript: [SessionMessage]? = nil) {
         self.id = id
         self.info = info
         self.conversation = conversation
+        self.transcript = transcript ?? conversation
         self.recordedMessages = recordedMessages
     }
 }
