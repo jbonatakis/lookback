@@ -201,3 +201,19 @@ private struct Store {
     let absent = SessionID(source: store.reader.source, value: secondary)
     #expect(throws: SessionReadError.sessionNotFound(absent)) { try store.reader.readSession(absent) }
 }
+
+@Test func claudeCatalogSkipsReplacedLinksAndDiscoversNewFilesOnTheNextPass() throws {
+    let store = Store()
+    defer { store.cleanUp() }
+    let content = #"{"uuid":"hi","type":"user","message":{"content":"hello"}}"#
+    let original = try store.write(content)
+    let snapshot = try store.reader.catalogSnapshot()
+    let other = try store.write(content, secondary)
+    #expect(try snapshot.listSessions().map(\.id) == [sid])
+    #expect(try snapshot.readSession(sid).conversation.count == 1)
+    try FileManager.default.removeItem(at: original)
+    try FileManager.default.createSymbolicLink(at: original, withDestinationURL: other)
+    #expect(try snapshot.listSessions().isEmpty)
+    #expect(throws: SessionReadError.self) { try snapshot.readSession(sid) }
+    #expect(try snapshot.catalogSnapshot().listSessions().count == 1)
+}

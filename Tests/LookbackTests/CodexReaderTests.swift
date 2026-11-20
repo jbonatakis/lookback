@@ -191,3 +191,40 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     let matching = CodexReader(homeDirectory: store.home, accountID: "a")
     #expect(throws: SessionReadError.incompleteHistory(forkID)) { try matching.readSession(forkID) }
 }
+
+@Test func localAccountChoicesRespectThreadIdentityAndOptionalOwners() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    func write(_ id: String, _ fields: String, archived: Bool = false) throws {
+        let row = """
+        {"type":"session_meta","payload":{"id":"\(id)","cwd":"/sample","account_scoped":true,"creator_account_id":"team",\(fields)}}
+        """
+        try store.write(row, id: id, directory: archived ? "archived_sessions" : "sessions/2026/01/02")
+    }
+    try write(legacyID, #""creator_user_id":null"#)
+    #expect(try store.reader.localAccounts().count == 1)
+    #expect(try store.reader.localAccounts().first?.userID == nil)
+    try write(paginatedID, #""creator_user_id":"first""#)
+    try write(UUID().uuidString.lowercased(), #""creator_user_id":"second""#, archived: true)
+    try write(UUID().uuidString.lowercased(), #""creator_user_id":"hidden","thread_source":"subagent""#)
+    try write(UUID().uuidString.lowercased(), #""creator_user_id":42"#)
+    try write(UUID().uuidString.lowercased(), #""creator_user_id":"first""#)
+    #expect(try store.reader.localAccounts().compactMap(\.userID) == ["first"])
+    let accounts = try CodexReader(homeDirectory: store.home, includeArchived: true).localAccounts()
+    #expect(Set(accounts.compactMap(\.userID)) == ["first", "second"])
+    #expect(accounts.count == 2 && accounts.allSatisfy { $0.lastWorkingDirectory == "/sample" })
+    #expect(try store.reader.listSessions().isEmpty)
+}
+
+@Test func codexCatalogIsSharedByScopedReadsAndRefreshedOnTheNextPass() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write(store.fixture("legacy"))
+    let snapshot = try store.reader.catalogSnapshot()
+    let scoped = snapshot.scoped(accountID: nil, userID: nil)
+    let first = try #require(scoped.listSessions().first)
+    #expect(try scoped.readSession(first.id).conversation.map(\.blocks) == store.reader.readSession(first.id).conversation.map(\.blocks))
+    try store.write(store.fixture("paginated"), id: paginatedID)
+    #expect(try scoped.listSessions().map(\.id) == [first.id])
+    #expect(try snapshot.catalogSnapshot().listSessions().count == 2)
+}
