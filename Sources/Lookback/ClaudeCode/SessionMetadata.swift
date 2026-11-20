@@ -37,7 +37,7 @@ struct SessionMetadata {
         if let value = field("aiTitle") { generated = value }
         if let value = field("lastPrompt") { lastPrompt = value }
         if let value = field("summary") { summary = value }
-        guard firstPrompt == nil, row["type"] as? String == "user", row["isMeta"] as? Bool != true,
+        guard firstPrompt == nil, row["type"] as? String == "user", !Entry.isTaskNotification(row), row["isMeta"] as? Bool != true,
               row["isCompactSummary"] as? Bool != true, row["isSidechain"] as? Bool != true,
               let message = row["message"] as? Row else { return }
         let blocks = (message["content"] as? [Any] ?? []).compactMap { $0 as? Row }

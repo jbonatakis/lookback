@@ -43,6 +43,20 @@ public enum MessageBlock: Equatable, Sendable {
     case other(type: String)
 }
 
+/// Metadata for a provider-generated background task update. The original payload remains in the message blocks.
+public struct SessionTaskNotification: Codable, Equatable, Sendable {
+    public let taskID, toolUseID, status, summary, result: String?
+
+    public init(taskID: String? = nil, toolUseID: String? = nil, status: String? = nil,
+                summary: String? = nil, result: String? = nil) {
+        self.taskID = taskID
+        self.toolUseID = toolUseID
+        self.status = status
+        self.summary = summary
+        self.result = result
+    }
+}
+
 public struct SessionMessage: Identifiable, Sendable {
     /// The source's message ID. Multiple recorded occurrences can share this value.
     public let id: String
@@ -52,16 +66,19 @@ public struct SessionMessage: Identifiable, Sendable {
     public let timestamp: Date?
     public let role: MessageRole
     public let blocks: [MessageBlock]
+    public let taskNotification: SessionTaskNotification?
     public let isCompactionSummary: Bool
 
     public init(id: String, parentID: String?, timestamp: Date?, role: MessageRole,
-                blocks: [MessageBlock], isCompactionSummary: Bool = false, recordedIndex: Int? = nil) {
+                blocks: [MessageBlock], isCompactionSummary: Bool = false, recordedIndex: Int? = nil,
+                taskNotification: SessionTaskNotification? = nil) {
         self.id = id
         self.recordedIndex = recordedIndex
         self.parentID = parentID
         self.timestamp = timestamp
         self.role = role
         self.blocks = blocks
+        self.taskNotification = taskNotification
         self.isCompactionSummary = isCompactionSummary
     }
 }

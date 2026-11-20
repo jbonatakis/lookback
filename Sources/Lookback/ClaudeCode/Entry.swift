@@ -46,11 +46,45 @@ struct Entry {
         else if carriesResult { role = .tool }
         else { role = .user }
         message = SessionMessage(id: id, parentID: parent, timestamp: transcriptDate(timestamp),
-                                 role: role, blocks: blocks, isCompactionSummary: compact, recordedIndex: recordedIndex)
+                                 role: role, blocks: blocks, isCompactionSummary: compact, recordedIndex: recordedIndex,
+                                 taskNotification: type == "user" ? Self.taskNotification(row, blocks: blocks) : nil)
     }
 
     func sameWriter(as other: Entry) -> Bool {
         sidechain == other.sidechain && agent == other.agent
+    }
+
+    static func isTaskNotification(_ row: Row) -> Bool {
+        let origin = row["origin"] as? Row
+        return origin?["kind"] as? String == "task-notification" || row["turnOrigin"] as? String == "task_notification"
+    }
+
+    private static func taskNotification(_ row: Row, blocks: [MessageBlock]) -> SessionTaskNotification? {
+        guard isTaskNotification(row) else { return nil }
+        let text = blocks.compactMap { block -> String? in
+            if case .text(let value) = block { return value }
+            return nil
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let open = "<task-notification>", close = "</task-notification>"
+        guard text.hasPrefix(open), text.hasSuffix(close) else { return .init() }
+        var body = text.dropFirst(open.count).dropLast(close.count)
+        var fields: [Substring: String] = [:]
+        // Results may contain arbitrary Markdown, JSON, and unescaped angle brackets.
+        // Read the outer fields and keep the result body intact.
+        while true {
+            body = body.drop(while: \.isWhitespace)
+            if body.isEmpty { break }
+            guard body.first == "<", let end = body.firstIndex(of: ">") else { return .init() }
+            let name = body[body.index(after: body.startIndex)..<end]
+            guard !name.isEmpty, name.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }) else { return .init() }
+            let value = body[body.index(after: end)...]
+            guard let closing = value.range(of: "</\(name)>") else { return .init() }
+            let contents = value[..<closing.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !contents.isEmpty { fields[name] = contents }
+            body = value[closing.upperBound...]
+        }
+        return .init(taskID: fields["task-id"], toolUseID: fields["tool-use-id"], status: fields["status"],
+                     summary: fields["summary"], result: fields["result"])
     }
 
     private static func block(_ data: Row) -> MessageBlock {

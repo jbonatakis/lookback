@@ -22,6 +22,28 @@ private struct Store {
     func cleanUp() { try? FileManager.default.removeItem(at: root) }
 }
 
+@Test func taskNotificationOriginDistinguishesAgentOutputFromPastedText() throws {
+    let store = Store()
+    defer { store.cleanUp() }
+    let text = "<task-notification><task-id>agent-1</task-id><tool-use-id>call-2</tool-use-id><status>completed</status><summary>Review finished</summary><result>a < b && c; quoted <status>failed</status></result></task-notification>"
+    let rows: [[String: Any]] = [
+        ["uuid": "paste", "type": "user", "message": ["content": text]],
+        ["uuid": "event", "parentUuid": "paste", "type": "user", "origin": ["kind": "task-notification"], "message": ["content": text]],
+        ["uuid": "invalid", "parentUuid": "event", "type": "user", "turnOrigin": "task_notification",
+         "message": ["content": [["type": "text", "text": "partial payload"]]]]
+    ]
+    try store.write(try rows.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }.joined(separator: "\n"))
+    let history = try store.reader.readSession(sid)
+    for messages in [history.conversation, history.transcript, history.recordedMessages] {
+        #expect(messages.map(\.id) == ["paste", "event", "invalid"])
+        #expect(messages[0].taskNotification == nil && messages[0].blocks == [.text(text)])
+        #expect(messages[1].taskNotification == .init(taskID: "agent-1", toolUseID: "call-2", status: "completed",
+                                                      summary: "Review finished", result: "a < b && c; quoted <status>failed</status>"))
+        #expect(messages[1].blocks == [.text(text)])
+        #expect(messages[2].taskNotification == SessionTaskNotification() && messages[2].blocks == [.text("partial payload")])
+    }
+}
+
 @Test func discoveryAndReadUseTheSameNewestCopy() throws {
     let store = Store()
     defer { store.cleanUp() }
