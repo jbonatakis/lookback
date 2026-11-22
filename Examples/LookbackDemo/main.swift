@@ -9,7 +9,7 @@ func preview(_ text: String, limit: Int = 120) -> String {
     return prefix.endIndex == line.endIndex ? line : "\(prefix)…"
 }
 
-func show(_ history: SessionHistory) {
+func show(_ history: SessionHistory, provider: String) {
     print(preview(history.info?.title ?? history.id.value))
     if let session = history.info, let directory = session.workingDirectory {
         print(preview(directory + (session.gitBranch.map { "  [\($0)]" } ?? "")))
@@ -35,7 +35,7 @@ func show(_ history: SessionHistory) {
         let speaker: String
         switch message.role {
         case .user: speaker = "You"
-        case .assistant: speaker = history.id.source == "codex" ? "Codex" : "Claude"
+        case .assistant: speaker = provider
         case .system: speaker = message.isCompactionSummary ? "Compaction summary" : "System"
         case .tool: continue
         }
@@ -56,7 +56,7 @@ func show(_ history: SessionHistory) {
 }
 
 func run(_ arguments: [String]) throws {
-    let usage = "Usage: swift run lookback-demo [--source claude-code|codex] [--list | SESSION_ID]"
+    let usage = "Usage: swift run lookback-demo [--source claude-code|codex|pi] [--list | SESSION_ID]"
     if arguments == ["--help"] || arguments == ["-h"] { print(usage); return }
     var args = arguments
     var source = "claude-code"
@@ -71,10 +71,11 @@ func run(_ arguments: [String]) throws {
     switch source {
     case "claude-code": reader = ClaudeCodeReader(); provider = "Claude Code"
     case "codex": reader = CodexReader(); provider = "Codex"
+    case "pi": reader = PiReader(); provider = "Pi"
     default: fail(usage)
     }
     if let id = args.first, id != "--list" {
-        show(try reader.readSession(SessionID(source: reader.source, value: id)))
+        show(try reader.readSession(SessionID(source: reader.source, value: id)), provider: provider)
         return
     }
     let sessions = try reader.listSessions()
@@ -85,7 +86,7 @@ func run(_ arguments: [String]) throws {
         }
         if sessions.isEmpty { print("No \(provider) sessions found.") }
     } else if let latest = sessions.first {
-        show(try reader.readSession(latest.id))
+        show(try reader.readSession(latest.id), provider: provider)
     } else {
         print("No \(provider) sessions found.")
     }
