@@ -100,48 +100,40 @@ public struct AntigravityReader: SessionReader {
         guard id.source == source else { throw SessionReadError.unsupportedSource(id.source) }
         guard UUID(uuidString: id.value) != nil else { throw SessionReadError.invalidSessionID(id.value) }
         guard let info = try sessions()[id] else { throw SessionReadError.sessionNotFound(id) }
-        let data = try Data(contentsOf: transcript(id), options: .mappedIfSafe)
-        let decoder = JSONDecoder()
         let dates = ISO8601DateFormatter()
         let fractionalDates = ISO8601DateFormatter()
         fractionalDates.formatOptions.insert(.withFractionalSeconds)
-        var steps: [Int: Step] = [:]
-        for line in data.split(separator: 10) {
-            guard let step = try? decoder.decode(Step.self, from: line),
-                  step.type == "USER_INPUT" || step.type == "PLANNER_RESPONSE" else { continue }
-            steps[step.step_index] = step
-        }
-        var messages: [SessionMessage] = []
-        for index in steps.keys.sorted() {
-            guard let step = steps[index] else { continue }
-            let isUser = step.type == "USER_INPUT"
+        var steps: [Int: (role: MessageRole, date: Date?, blocks: [MessageBlock])] = [:]
+        try TranscriptFile.forEachRow(in: transcript(id)) { step in
+            guard let index = step["step_index"] as? Int, let type = step["type"] as? String,
+                  type == "USER_INPUT" || type == "PLANNER_RESPONSE" else { return }
+            // Updates replace the previous step even if its new content is empty.
+            steps[index] = nil
+            let isUser = type == "USER_INPUT"
             var blocks: [MessageBlock] = []
-            if var text = step.content {
+            if var text = step["content"] as? String {
                 if isUser && text.hasPrefix("<USER_REQUEST>") {
-                    guard let end = text.range(of: "</USER_REQUEST>", options: .backwards) else { continue }
+                    guard let end = text.range(of: "</USER_REQUEST>", options: .backwards) else { return }
                     text = String(text[text.index(text.startIndex, offsetBy: "<USER_REQUEST>".count)..<end.lowerBound])
                 }
                 text = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !text.isEmpty { blocks.append(.text(text)) }
             }
-            for (offset, call) in (step.tool_calls ?? []).enumerated() {
-                blocks.append(.toolCall(id: "\(index)-\(offset)", name: call.name, inputJSON: nil))
+            for (offset, call) in (step["tool_calls"] as? [Any] ?? []).enumerated() {
+                guard let call = call as? Row, let name = call["name"] as? String else { continue }
+                let input = call["args"].flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.fragmentsAllowed, .sortedKeys]) }
+                blocks.append(.toolCall(id: "\(index)-\(offset)", name: name, inputJSON: input))
             }
-            guard !blocks.isEmpty else { continue }
-            let timestamp = step.created_at.flatMap { dates.date(from: $0) ?? fractionalDates.date(from: $0) }
+            guard !blocks.isEmpty else { return }
+            let timestamp = (step["created_at"] as? String).flatMap { dates.date(from: $0) ?? fractionalDates.date(from: $0) }
+            steps[index] = (isUser ? .user : .assistant, timestamp, blocks)
+        }
+        var messages: [SessionMessage] = []
+        for (index, step) in steps.sorted(by: { $0.key < $1.key }) {
             messages.append(SessionMessage(id: "step-\(index)", parentID: messages.last?.id,
-                                           timestamp: timestamp, role: isUser ? .user : .assistant,
-                                           blocks: blocks, recordedIndex: messages.count))
+                                           timestamp: step.date, role: step.role,
+                                           blocks: step.blocks, recordedIndex: messages.count))
         }
         return SessionHistory(id: id, conversation: messages, recordedMessages: messages, info: info)
-    }
-
-    private struct Step: Decodable {
-        struct Call: Decodable { let name: String }
-        let step_index: Int
-        let type: String
-        let created_at: String?
-        let content: String?
-        let tool_calls: [Call]?
     }
 }

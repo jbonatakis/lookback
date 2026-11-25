@@ -23,7 +23,7 @@ struct AntigravityReaderTests {
         let initial = #"""
         {"step_index":0,"type":"USER_INPUT","content":"<USER_REQUEST>\nQuestion\n</USER_REQUEST>\n<ADDITIONAL_METADATA>private</ADDITIONAL_METADATA>"}
         broken line
-        {"step_index":1,"type":"PLANNER_RESPONSE","thinking":"private","tool_calls":[{"name":"list_directory"}]}
+        {"step_index":1,"type":"PLANNER_RESPONSE","thinking":"private","tool_calls":[{"name":"list_directory"},{"name":"view_file","args":{"AbsolutePath":"/tmp/File.swift","StartLine":4}}]}
         """#
         try initial.write(to: file, atomically: true, encoding: .utf8)
         let reader = AntigravityReader(directory: directory)
@@ -33,7 +33,8 @@ struct AntigravityReaderTests {
         let first = try snapshot.readSession(info.id)
         #expect(first.transcript.map(\.id) == ["step-0", "step-1"])
         #expect(first.transcript[0].blocks == [.text("Question")])
-        #expect(first.transcript[1].blocks == [.toolCall(id: "1-0", name: "list_directory", inputJSON: nil)])
+        #expect(first.transcript[1].blocks == [.toolCall(id: "1-0", name: "list_directory", inputJSON: nil),
+                                               .toolCall(id: "1-1", name: "view_file", inputJSON: try JSONSerialization.data(withJSONObject: ["AbsolutePath": "/tmp/File.swift", "StartLine": 4], options: .sortedKeys))])
 
         let reply = #"{"step_index":3,"type":"PLANNER_RESPONSE","content":"Answer","thinking":"private","created_at":"2026-01-01T00:00:04Z"}"#
         try (initial + "\n" + reply + "\n" + reply).write(to: file, atomically: true, encoding: .utf8)

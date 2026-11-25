@@ -68,6 +68,23 @@ struct CodexItem {
                 CodexItem(.tool, [.toolResult(callID: id, contentJSON: json(output), isError: failed)], nil, rep)]
     }
 
+    static func completionEvent(_ payload: Row) -> SessionToolEvent? {
+        guard payload["type"] as? String == "item_completed", let item = payload["item"] as? Row,
+              let id = (item["call_id"] ?? item["id"]) as? String, !id.isEmpty else { return nil }
+        let failed = (item["status"] as? String)?.lowercased() == "failed" || item["success"] as? Bool == false
+            || (item["exit_code"] as? Int).map { $0 != 0 } == true
+        switch item["type"] as? String {
+        case "CommandExecution":
+            let input = item.filter { ["command", "parsed_cmd", "cwd"].contains($0.key) }
+            return SessionToolEvent(id: id, name: "exec_command", inputJSON: json(input),
+                                    outputJSON: json(item["aggregated_output"]), exitCode: item["exit_code"] as? Int, isError: failed)
+        case "FileChange":
+            return SessionToolEvent(id: id, name: "apply_patch", inputJSON: json(item["changes"]),
+                                    outputJSON: nil, exitCode: nil, isError: failed)
+        default: return nil
+        }
+    }
+
     private static func message(_ role: MessageRole, _ body: Row, _ representation: Representation) -> CodexItem? {
         let content = body["content"] as? [Row] ?? []
         let blocks: [MessageBlock] = content.compactMap { block in

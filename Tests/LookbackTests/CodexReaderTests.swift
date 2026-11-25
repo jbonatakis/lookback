@@ -195,12 +195,81 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"wrapper","output":"ok"}}
     """)
     let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(history.recordedMessages.first?.toolEvents.first?.exitCode == 1)
     #expect(history.recordedMessages.map(\.blocks) == [
         [.toolCall(id: "standalone", name: "exec_command", inputJSON: Data(#""example""#.utf8))],
         [.toolResult(callID: "standalone", contentJSON: Data(#""failed""#.utf8), isError: true)],
         [.toolCall(id: "wrapper", name: "batch", inputJSON: Data(#""work""#.utf8))],
         [.toolResult(callID: "wrapper", contentJSON: Data(#""ok""#.utf8), isError: false)]
     ])
+}
+
+@Test func codexKeepsCompletedScriptEventsWithoutAddingModelCalls() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write("""
+    {"type":"session_meta","payload":{"id":"\(legacyID)"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","call_id":"script","name":"exec","input":"run()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"one","command":"swift test","exit_code":1,"status":"failed"}}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"one","command":"swift test","exit_code":1,"status":"failed"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","call_id":"second","name":"exec","input":"other()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"unowned","command":"overlap"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"second","output":"ok"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"script","output":"ok"}}
+    """)
+    let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(history.recordedMessages.count == 4)
+    let events = history.conversation.flatMap(\.toolEvents)
+    #expect(events.map(\.id) == ["one"])
+    #expect(events.first?.exitCode == 1)
+    #expect(events.first?.isError == true)
+}
+
+@Test func codexMatchesDelayedAndEarlyCompletionsByCallIDAcrossTurns() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write("""
+    {"type":"session_meta","payload":{"id":"\(legacyID)"}}
+    {"type":"response_item","payload":{"type":"function_call","id":"first","call_id":"a","name":"functions.exec_command","arguments":"{}"}}
+    {"type":"response_item","payload":{"type":"function_call_output","call_id":"a","output":"finished"}}
+    {"type":"event_msg","payload":{"type":"turn_complete"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","id":"wrapper","call_id":"script","name":"exec","input":"run()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"ui-a","call_id":"a","exit_code":1}}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"child","command":"inner"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","id":"second","call_id":"s2","name":"exec","input":"other()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"FileChange","id":"p","status":"completed"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"script","output":"ok"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"s2","output":"ok"}}
+    {"type":"event_msg","payload":{"type":"turn_complete"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","id":"patch","call_id":"p","name":"apply_patch","input":"patch"}}
+    """)
+    let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    let messages = history.conversation
+    #expect(messages.count == 7)
+    #expect(messages.first { $0.id == "first" }?.toolEvents.first?.exitCode == 1)
+    #expect(messages[1].blocks == [.toolResult(callID: "a", contentJSON: Data(#""finished""#.utf8), isError: true)])
+    #expect(messages.first { $0.id == "wrapper" }?.toolEvents.map(\.id) == ["child"])
+    #expect(messages.first { $0.id == "second" }?.toolEvents.isEmpty == true)
+    #expect(messages.first { $0.id == "patch" }?.toolEvents.map(\.id) == ["p"])
+}
+
+@Test func codexLeavesReusedAndRolledBackCallIDsUnattributed() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write("""
+    {"type":"session_meta","payload":{"id":"\(legacyID)"}}
+    {"type":"event_msg","payload":{"type":"user_message","message":"First turn"}}
+    {"type":"response_item","payload":{"type":"function_call","call_id":"old","name":"exec_command","arguments":"{}"}}
+    {"type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}
+    {"type":"response_item","payload":{"type":"function_call","call_id":"twice","name":"exec_command","arguments":"{}"}}
+    {"type":"response_item","payload":{"type":"function_call_output","call_id":"twice","output":"ok"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","call_id":"script","name":"exec","input":"run()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"old","exit_code":1}}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"twice","exit_code":1}}}
+    {"type":"response_item","payload":{"type":"function_call","call_id":"twice","name":"exec_command","arguments":"{}"}}
+    """)
+    let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(history.recordedMessages.flatMap(\.toolEvents).isEmpty)
 }
 
 @Test func codexRefusesAnUnavailableOrOutOfScopeForkBase() throws {

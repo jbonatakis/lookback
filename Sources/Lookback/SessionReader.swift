@@ -57,6 +57,15 @@ public struct SessionTaskNotification: Codable, Equatable, Sendable {
     }
 }
 
+/// A provider-reported completion. A matching ID describes the model call itself. A different
+/// ID records an event observed while a single script was in flight, without claiming causality.
+public struct SessionToolEvent: Sendable {
+    public let id, name: String
+    public let inputJSON, outputJSON: Data?
+    public let exitCode: Int?
+    public let isError: Bool
+}
+
 public struct SessionMessage: Identifiable, Sendable {
     /// The source's message ID. Multiple recorded occurrences can share this value.
     public let id: String
@@ -65,19 +74,21 @@ public struct SessionMessage: Identifiable, Sendable {
     public let parentID: String?
     public let timestamp: Date?
     public let role: MessageRole
-    public let blocks: [MessageBlock]
+    public internal(set) var blocks: [MessageBlock]
+    public internal(set) var toolEvents: [SessionToolEvent]
     public let taskNotification: SessionTaskNotification?
     public let isCompactionSummary: Bool
 
     public init(id: String, parentID: String?, timestamp: Date?, role: MessageRole,
                 blocks: [MessageBlock], isCompactionSummary: Bool = false, recordedIndex: Int? = nil,
-                taskNotification: SessionTaskNotification? = nil) {
+                taskNotification: SessionTaskNotification? = nil, toolEvents: [SessionToolEvent] = []) {
         self.id = id
         self.recordedIndex = recordedIndex
         self.parentID = parentID
         self.timestamp = timestamp
         self.role = role
         self.blocks = blocks
+        self.toolEvents = toolEvents
         self.taskNotification = taskNotification
         self.isCompactionSummary = isCompactionSummary
     }
