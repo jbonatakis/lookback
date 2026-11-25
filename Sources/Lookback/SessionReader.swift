@@ -74,8 +74,8 @@ public struct SessionMessage: Identifiable, Sendable {
     public let parentID: String?
     public let timestamp: Date?
     public let role: MessageRole
-    public let blocks: [MessageBlock]
-    public let toolEvents: [SessionToolEvent]
+    public internal(set) var blocks: [MessageBlock]
+    public internal(set) var toolEvents: [SessionToolEvent]
     public let taskNotification: SessionTaskNotification?
     public let isCompactionSummary: Bool
 

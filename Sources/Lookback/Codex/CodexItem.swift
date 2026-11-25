@@ -9,7 +9,6 @@ struct CodexItem {
     let nativeID: String?
     let representation: Representation
     var summary = false
-    var toolEvents: [SessionToolEvent] = []
 
     init(_ role: MessageRole, _ blocks: [MessageBlock], _ id: String?, _ representation: Representation = .response) {
         self.role = role
@@ -71,8 +70,9 @@ struct CodexItem {
 
     static func completionEvent(_ payload: Row) -> SessionToolEvent? {
         guard payload["type"] as? String == "item_completed", let item = payload["item"] as? Row,
-              let id = item["id"] as? String else { return nil }
-        let failed = (item["status"] as? String)?.lowercased() == "failed"
+              let id = (item["call_id"] ?? item["id"]) as? String, !id.isEmpty else { return nil }
+        let failed = (item["status"] as? String)?.lowercased() == "failed" || item["success"] as? Bool == false
+            || (item["exit_code"] as? Int).map { $0 != 0 } == true
         switch item["type"] as? String {
         case "CommandExecution":
             let input = item.filter { ["command", "parsed_cmd", "cwd"].contains($0.key) }
