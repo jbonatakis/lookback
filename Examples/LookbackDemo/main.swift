@@ -56,7 +56,7 @@ func show(_ history: SessionHistory, provider: String) {
 }
 
 func run(_ arguments: [String]) throws {
-    let usage = "Usage: swift run lookback-demo [--source claude-code|codex|pi] [--list | SESSION_ID]"
+    let usage = "Usage: swift run lookback-demo [--source claude-code|codex|pi|antigravity] [--list | SESSION_ID]"
     if arguments == ["--help"] || arguments == ["-h"] { print(usage); return }
     var args = arguments
     var source = "claude-code"
@@ -71,6 +71,7 @@ func run(_ arguments: [String]) throws {
     switch source {
     case "claude-code": reader = ClaudeCodeReader(); provider = "Claude Code"
     case "codex": reader = CodexReader(); provider = "Codex"
+    case "antigravity": reader = AntigravityReader(); provider = "Google Antigravity"
     case "pi": reader = PiReader(); provider = "Pi"
     default: fail(usage)
     }

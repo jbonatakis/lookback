@@ -1,6 +1,6 @@
 # Lookback
 
-Lookback is a read-only Swift library for exploring local Claude Code, Codex, and Pi sessions. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
+Lookback is a read-only Swift library for exploring local Claude Code, Codex, Pi, and Google Antigravity CLI sessions. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
 
 Lookback is released under the [MIT License](LICENSE).
 
@@ -20,4 +20,4 @@ The [example program](Examples/LookbackDemo/main.swift) shows recent conversatio
 
 ## Documentation
 
-- [Reading sessions](docs/reading-sessions.md) — reading Claude Code, Codex, and Pi sessions, choosing a view, adding providers, and compatibility notes.
+- [Reading sessions](docs/reading-sessions.md) — reading Claude Code, Codex, Pi, and Google Antigravity CLI sessions, choosing a view, adding providers, and compatibility notes.

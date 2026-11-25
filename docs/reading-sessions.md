@@ -33,6 +33,10 @@ Use `PiReader()` or `swift run lookback-demo --source pi --list` for Pi v3 JSONL
 
 The session header supplies the project and native ID. Lookback scopes the ID to its project (`nativeID@cwd`) because Pi allows custom IDs. A saved name takes precedence over the first user prompt. The active conversation follows the last persisted leaf and applies compaction and context edits. The transcript keeps the original user and assistant exchange, tool activity and summaries on that branch. Recorded messages also include abandoned branches. Prompt setup, settings, and extension state are omitted from the exchange. Forks and clones use the history in their own file.
 
+## Read Google Antigravity CLI sessions
+
+Use `AntigravityReader()` or `swift run lookback-demo --source antigravity --list`. The reader discovers projects in the local SQLite catalog under `~/.gemini/antigravity-cli` and reads prompts, replies, and tool names from generated transcripts. Pass `directory:` to select a different Antigravity CLI store.
+
 ## Choose a view
 
 - Use `conversation` to show what remained in the conversation on its selected branch. Compaction summaries are marked explicitly. Tool calls and their parallel results are linked back into the conversation.
