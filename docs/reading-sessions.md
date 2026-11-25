@@ -35,7 +35,7 @@ The session header supplies the project and native ID. Lookback scopes the ID to
 
 ## Read Google Antigravity CLI sessions
 
-Use `AntigravityReader()` or `swift run lookback-demo --source antigravity --list`. The reader discovers projects in the local SQLite catalog under `~/.gemini/antigravity-cli` and reads prompts, replies, and tool names from generated transcripts. Pass `directory:` to select a different Antigravity CLI store.
+Use `AntigravityReader()` or `swift run lookback-demo --source antigravity --list`. The reader discovers projects in the local SQLite catalog under `~/.gemini/antigravity-cli` and reads prompts, replies, tool names, and recorded tool arguments from generated transcripts. Pass `directory:` to select a different Antigravity CLI store.
 
 ## Choose a view
 
@@ -43,6 +43,7 @@ Use `AntigravityReader()` or `swift run lookback-demo --source antigravity --lis
 - Use `transcript` for a conversation viewer. For Codex and Pi it keeps the original messages across compactions and follows the selected branch through rollbacks and forks. Other readers default to `conversation`.
 - Use `recordedMessages` to reconstruct activity over time. It includes visible messages from earlier context and abandoned branches in file order. A source message ID can repeat within one session. To index each occurrence, pair the session ID with its zero-based position in `recordedMessages`. The readers supply that position as `message.recordedIndex` in both views. Positions can change if earlier records are rewritten or removed.
 - A message has a source-local ID, optional parent and timestamp, role, and ordered content blocks. Text, tool calls, and tool results are represented directly. Tool inputs and result contents are UTF-8 JSON. Other block types retain their type and position. Message parents can refer to internal records omitted from either view.
+- Codex messages can include `toolEvents` for command and file-change completions. A matching call ID supplies execution details such as the exit code. A completion with no recorded owner can appear under the one script that was running when it arrived. Overlapping scripts receive only completions with a matching call ID.
 - Claude Code messages marked by the provider as background task notifications carry optional `taskNotification` metadata (task and tool-use IDs, status, summary, and result). The original role and text blocks are preserved, including for unrecognized payloads.
 - Claude Code discovery returns top-level sessions with a usable title or prompt, ordered by modification time. It skips inaccessible projects and transcripts and selects the newest readable copy of a session. It samples the ends of each transcript and falls back to a full scan when it cannot find a title in the sample. The Claude Code and Codex readers skip subagent sessions. All readers skip malformed JSON lines, including an unfinished final write. Missing stores produce an empty listing.
 

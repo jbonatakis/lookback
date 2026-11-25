@@ -30,7 +30,8 @@ struct CodexHistory {
     private var ordinal = 0
     private var segment = ""
     private var failedCalls: Set<String> = []
-    private var inFlight = Set<String>()
+    private var completions: [String: SessionToolEvent] = [:]
+    private var inFlight: [String: Int] = [:]
 
     struct Checkpoint {
         fileprivate var turns: [Turn] = []
@@ -75,15 +76,26 @@ struct CodexHistory {
             compact(payload, timestamp: timestamp)
         default:
             if let item = CodexItem.decode(type: type, payload: payload) {
-                if let key = item.toolKey {
-                    if key.output { inFlight.remove(key.id) } else { inFlight.insert(key.id) }
-                }
                 enqueue(item, timestamp: timestamp)
+                if let key = item.toolKey {
+                    inFlight[key.id] = key.output ? nil : pending.indices.last
+                }
             } else if type == "event_msg" {
+                let completion = CodexItem.completionEvent(payload)
+                if inFlight.count == 1, let (callID, index) = inFlight.first,
+                   case let .toolCall(_, name, _) = pending[index].item.blocks.first, ["exec", "functions.exec"].contains(name),
+                   let event = completion, event.id != callID {
+                    // Keep the provider's completion as context without inventing an extra model call.
+                    if !pending[index].item.toolEvents.contains(where: { $0.id == event.id }) {
+                        pending[index].item.toolEvents.append(event)
+                    }
+                    return
+                }
                 for item in CodexItem.completedTool(payload) {
                     guard let key = item.toolKey else { continue }
                     // A custom tool can report many child processes under its single model call.
-                    guard inFlight.isEmpty || inFlight.contains(key.id) else { continue }
+                    guard inFlight.isEmpty || inFlight[key.id] != nil else { continue }
+                    if !key.output, let completion { completions[key.id] = completion }
                     if case .toolResult(_, _, true) = item.blocks.first { failedCalls.insert(key.id) }
                     enqueue(item, timestamp: timestamp)
                 }
@@ -175,6 +187,7 @@ struct CodexHistory {
             active.append(index)
         }
         pending.removeAll(keepingCapacity: true)
+        completions.removeAll()
         failedCalls.removeAll()
         inFlight.removeAll()
     }
@@ -187,8 +200,10 @@ struct CodexHistory {
             }
             return block
         }
+        var events = item.toolEvents
+        if let key = item.toolKey, !key.output, let completion = completions[key.id] { events.append(completion) }
         recorded.append(SessionMessage(id: item.nativeID ?? ids.sorted().first ?? fallback, parentID: nil, timestamp: timestamp,
-                                       role: item.role, blocks: blocks, isCompactionSummary: item.summary, recordedIndex: index))
+                                       role: item.role, blocks: blocks, isCompactionSummary: item.summary, recordedIndex: index, toolEvents: events))
         aliases.append(ids)
         return index
     }

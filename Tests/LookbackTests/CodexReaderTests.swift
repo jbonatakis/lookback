@@ -195,12 +195,34 @@ func codexProjectsBothHistoryViews(_ mode: String) throws {
     {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"wrapper","output":"ok"}}
     """)
     let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(history.recordedMessages.first?.toolEvents.first?.exitCode == 1)
     #expect(history.recordedMessages.map(\.blocks) == [
         [.toolCall(id: "standalone", name: "exec_command", inputJSON: Data(#""example""#.utf8))],
         [.toolResult(callID: "standalone", contentJSON: Data(#""failed""#.utf8), isError: true)],
         [.toolCall(id: "wrapper", name: "batch", inputJSON: Data(#""work""#.utf8))],
         [.toolResult(callID: "wrapper", contentJSON: Data(#""ok""#.utf8), isError: false)]
     ])
+}
+
+@Test func codexKeepsCompletedScriptEventsWithoutAddingModelCalls() throws {
+    let store = CodexStore()
+    defer { store.cleanUp() }
+    try store.write("""
+    {"type":"session_meta","payload":{"id":"\(legacyID)"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","call_id":"script","name":"exec","input":"run()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"one","command":"swift test","exit_code":1,"status":"failed"}}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"one","command":"swift test","exit_code":1,"status":"failed"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call","call_id":"second","name":"exec","input":"other()"}}
+    {"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"unowned","command":"overlap"}}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"second","output":"ok"}}
+    {"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"script","output":"ok"}}
+    """)
+    let history = try store.reader.readSession(SessionID(source: "codex", value: legacyID))
+    #expect(history.recordedMessages.count == 4)
+    let events = history.conversation.flatMap(\.toolEvents)
+    #expect(events.map(\.id) == ["one"])
+    #expect(events.first?.exitCode == 1)
+    #expect(events.first?.isError == true)
 }
 
 @Test func codexRefusesAnUnavailableOrOutOfScopeForkBase() throws {

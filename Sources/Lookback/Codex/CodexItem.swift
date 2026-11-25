@@ -9,6 +9,7 @@ struct CodexItem {
     let nativeID: String?
     let representation: Representation
     var summary = false
+    var toolEvents: [SessionToolEvent] = []
 
     init(_ role: MessageRole, _ blocks: [MessageBlock], _ id: String?, _ representation: Representation = .response) {
         self.role = role
@@ -66,6 +67,22 @@ struct CodexItem {
         let rep: Representation = event["item"] != nil ? .completed : .display
         return [CodexItem(.assistant, [.toolCall(id: id, name: name, inputJSON: json(input))], id, rep),
                 CodexItem(.tool, [.toolResult(callID: id, contentJSON: json(output), isError: failed)], nil, rep)]
+    }
+
+    static func completionEvent(_ payload: Row) -> SessionToolEvent? {
+        guard payload["type"] as? String == "item_completed", let item = payload["item"] as? Row,
+              let id = item["id"] as? String else { return nil }
+        let failed = (item["status"] as? String)?.lowercased() == "failed"
+        switch item["type"] as? String {
+        case "CommandExecution":
+            let input = item.filter { ["command", "parsed_cmd", "cwd"].contains($0.key) }
+            return SessionToolEvent(id: id, name: "exec_command", inputJSON: json(input),
+                                    outputJSON: json(item["aggregated_output"]), exitCode: item["exit_code"] as? Int, isError: failed)
+        case "FileChange":
+            return SessionToolEvent(id: id, name: "apply_patch", inputJSON: json(item["changes"]),
+                                    outputJSON: nil, exitCode: nil, isError: failed)
+        default: return nil
+        }
     }
 
     private static func message(_ role: MessageRole, _ body: Row, _ representation: Representation) -> CodexItem? {
