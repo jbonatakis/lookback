@@ -1,6 +1,6 @@
 # Lookback
 
-Lookback is a read-only Swift library for exploring local Claude Code, Codex, and Pi sessions. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
+Lookback is a read-only Swift library for exploring local Claude Code, Codex, Pi, and Google Antigravity CLI sessions. The package requires Swift 6 and targets macOS 13 and later. It uses Foundation and has no external package dependencies.
 
 ## Try the example
 
@@ -48,6 +48,10 @@ The active view applies compaction and turn rollbacks. Paginated reverts can cre
 Use `PiReader()` or `swift run lookback-demo --source pi --list` for Pi v3 JSONL sessions. By default the reader checks `~/.pi/agent/sessions`, or `$PI_CODING_AGENT_DIR/sessions` with a custom agent home. `PI_CODING_AGENT_SESSION_DIR` overrides that location. Pass `PiReader(sessionsDirectory: url)` to select a store explicitly, including one configured through Pi's `--session-dir` or `sessionDir`. The reader accepts flat stores and the default encoded project directories.
 
 The session header supplies the project and native ID. Lookback scopes the ID to its project (`nativeID@cwd`) because Pi allows custom IDs. A saved name takes precedence over the first user prompt. The active conversation follows the last persisted leaf and applies compaction and context edits. The transcript keeps the original user and assistant exchange, tool activity and summaries on that branch. Recorded messages also include abandoned branches. Prompt setup, settings, and extension state are omitted from the exchange. Forks and clones use the history in their own file.
+
+## Read Google Antigravity CLI sessions
+
+Use `AntigravityReader()` or `swift run lookback-demo --source antigravity --list`. The reader discovers projects in the local SQLite catalog under `~/.gemini/antigravity-cli` and reads prompts, replies, and tool names from generated transcripts. Pass `directory:` to select a different Antigravity CLI store.
 
 ## Choose a view
 
